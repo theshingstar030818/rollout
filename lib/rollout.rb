@@ -5,7 +5,7 @@ require "set"
 
 class Rollout
   class Feature
-    attr_accessor :groups, :users, :percentage
+    attr_accessor :groups, :users, :percentage, :percentage_salt
     attr_reader :name, :options
 
     def initialize(name, string = nil, opts = {})
@@ -13,8 +13,9 @@ class Rollout
       @name    = name
 
       if string
-        raw_percentage,raw_users,raw_groups = string.split("|")
-        @percentage = raw_percentage.to_i
+        raw_percentage_opts,raw_users,raw_groups = string.split("|")
+        percentage, @percentage_salt = raw_percentage_opts.split(",")
+        @percentage = percentage.to_i
         @users = (raw_users || "").split(",").map(&:to_s).to_set
         @groups = (raw_groups || "").split(",").map(&:to_sym).to_set
       else
@@ -23,7 +24,7 @@ class Rollout
     end
 
     def serialize
-      "#{@percentage}|#{@users.to_a.join(",")}|#{@groups.to_a.join(",")}"
+      "#{@percentage},#{@percentage_salt}|#{@users.to_a.join(",")}|#{@groups.to_a.join(",")}"
     end
 
     def add_user(user)
@@ -47,6 +48,7 @@ class Rollout
       @groups = Set.new
       @users = Set.new
       @percentage = 0
+      @percentage_salt = nil
     end
 
     def active?(rollout, user)
@@ -63,6 +65,7 @@ class Rollout
     def to_hash
       {
         percentage: @percentage,
+        percentage_salt: @percentage_salt,
         groups: @groups,
         users: @users
       }
@@ -86,8 +89,10 @@ class Rollout
       end
 
       def user_id_for_percentage(user)
-        if @options[:randomize_percentage]
-          user_id(user).to_s + @name.to_s
+        if @percentage_salt
+          user_id(user) + @percentage_salt.to_s
+        elsif @options[:randomize_percentage]
+          user_id(user) + @name.to_s
         else
           user_id(user)
         end
@@ -189,9 +194,10 @@ class Rollout
     !active(feature, user)
   end
 
-  def activate_percentage(feature, percentage)
+  def activate_percentage(feature, percentage, percentage_salt = nil)
     with_feature(feature) do |f|
       f.percentage = percentage
+      f.percentage_salt = percentage_salt
     end
   end
 

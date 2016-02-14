@@ -272,6 +272,26 @@ RSpec.describe "Rollout" do
     end
   end
 
+  describe "activating a feature for a percentage of users with salt specified" do
+    before do
+      @rollout.activate_percentage(:alpha, 50, "banana")
+      @rollout.activate_percentage(:beta, 50, "apple")
+      @rollout.activate_percentage(:gama, 50, "apple")
+    end
+
+    let(:alpha_users) { (1..100).select { |id| @rollout.active?(:alpha, double(id: id)) } }
+    let(:beta_users) { (1..100).select { |id| @rollout.active?(:beta, double(id: id)) } }
+    let(:gama_users) { (1..100).select { |id| @rollout.active?(:gama, double(id: id)) } }
+
+    it "activates the feature for different set of users if salt is different" do
+      expect(alpha_users).not_to eq beta_users
+    end
+
+    it "activates the feature for same set of users if salt is same" do
+      expect(beta_users).to eq gama_users
+    end
+  end
+
   describe "activating a feature for a group as a string" do
     before do
       @rollout.define_group(:admins) { |user| user.id == 5 }
@@ -383,6 +403,7 @@ RSpec.describe "Rollout" do
       expect(feature.to_hash).to eq(
         groups: [:caretakers, :greeters].to_set,
         percentage: 10,
+        percentage_salt: nil,
         users: %w(42).to_set
       )
 
@@ -406,6 +427,7 @@ RSpec.describe "Rollout" do
       features.each do |feature|
         expect(@rollout.get(feature).to_hash).to eq(
           percentage: 0,
+          percentage_salt: nil,
           users: Set.new,
           groups: Set.new
         )
@@ -430,12 +452,14 @@ RSpec.describe "Rollout" do
     it "imports the settings from the legacy rollout once" do
       expect(@rollout.get(:chat).to_hash).to eq({
         percentage: 12,
+        percentage_salt: nil,
         users: %w(24 42),
         groups: [:dope_people]
       })
       @legacy.deactivate_all(:chat)
       expect(@rollout.get(:chat).to_hash).to eq({
         percentage: 12,
+        percentage_salt: nil,
         users: %w(24 42).to_set,
         groups: [:dope_people].to_set
       })
